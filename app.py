@@ -13,7 +13,7 @@ from pathlib import Path
 import sys
 import logging
 
-# Initialize logging
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -21,25 +21,25 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
-# Get port from environment variable (for Render)
-port = int(os.environ.get('PORT', 10000))
-
-# Use environment variables for configuration
+# Environment variables and configuration
+PORT = int(os.getenv('PORT', 10000))
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+
 if not GROQ_API_KEY:
     logger.error("GROQ_API_KEY not found in environment variables")
-    sys.exit(1)
+    raise ValueError("GROQ_API_KEY environment variable is required")
 
-# Configure upload folder and database path
+# Configure paths
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 FAISS_DB_PATH = os.path.join(BASE_DIR, 'faissdb')
-ALLOWED_EXTENSIONS = {'pdf'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Create necessary directories
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(FAISS_DB_PATH, exist_ok=True)
+
+ALLOWED_EXTENSIONS = {'pdf'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Load environment variables
 load_dotenv()
@@ -84,7 +84,8 @@ def upload_file():
         if file and allowed_file(file.filename):
             # Secure the filename and save the file
             filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            #filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            filepath = os.path.join(UPLOAD_FOLDER, file.filename)
             file.save(filepath)
             
             # Load PDF
@@ -182,4 +183,4 @@ def query_database():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=PORT)
