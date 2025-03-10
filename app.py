@@ -9,18 +9,37 @@ from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 import shutil
 from flask_cors import CORS
+from pathlib import Path
+import sys
+import logging
+
+# Initialize logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 
-# Configure upload folder
-UPLOAD_FOLDER = 'uploads'
+# Get port from environment variable (for Render)
+port = int(os.environ.get('PORT', 10000))
+
+# Use environment variables for configuration
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+if not GROQ_API_KEY:
+    logger.error("GROQ_API_KEY not found in environment variables")
+    sys.exit(1)
+
+# Configure upload folder and database path
+BASE_DIR = Path(__file__).resolve().parent
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
+FAISS_DB_PATH = os.path.join(BASE_DIR, 'faissdb')
 ALLOWED_EXTENSIONS = {'pdf'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Create uploads directory if it doesn't exist
+# Create necessary directories
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(FAISS_DB_PATH, exist_ok=True)
 
 # Load environment variables
 load_dotenv()
@@ -86,7 +105,7 @@ def upload_file():
             
             # Create and save FAISS database
             faissdb = FAISS.from_texts(texts, embedding=embeddings)
-            faissdb.save_local("faissdb")
+            faissdb.save_local(FAISS_DB_PATH)
             
             return jsonify({'message': 'File uploaded and processed successfully'}), 200
             
@@ -101,8 +120,8 @@ def delete_database():
     """
     try:
         # Check if faissdb directory exists
-        if os.path.exists('faissdb'):
-            shutil.rmtree('faissdb')
+        if os.path.exists(FAISS_DB_PATH):
+            shutil.rmtree(FAISS_DB_PATH)
             return jsonify({'message': 'Vector database deleted successfully'}), 200
         else:
             return jsonify({'message': 'No database found to delete'}), 404
@@ -125,11 +144,11 @@ def query_database():
         query = data['query']
         
         # Check if faissdb exists
-        if not os.path.exists('faissdb'):
+        if not os.path.exists(FAISS_DB_PATH):
             return jsonify({'error': 'No vector database found. Please upload a PDF first'}), 404
         
         # Load FAISS database
-        faissdb = FAISS.load_local("faissdb", embeddings, allow_dangerous_deserialization=True)
+        faissdb = FAISS.load_local(FAISS_DB_PATH, embeddings, allow_dangerous_deserialization=True)
         retriever = faissdb.as_retriever(search_kwargs={"k": 2})
         
         # Retrieve relevant chunks
@@ -163,4 +182,4 @@ def query_database():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=port)
